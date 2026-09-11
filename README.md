@@ -1,0 +1,1 @@
+# collector_rosstat_cpi
