@@ -87,6 +87,24 @@ def _write_batches(
         )
 
 
+def _as_date(value: Any) -> Any:
+    """Normalize whatever a dialect returns for a DATE column into a date.
+
+    PostgreSQL and Databricks return a ``date``; SQLite, which has no DATE type,
+    returns the ISO string it stored. Comparing the two spellings as dictionary
+    keys would silently miss every stored row and rewrite the whole panel, so the
+    normalization happens here rather than at each call site.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str) and value:
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return value
+    return value
+
+
 def get_max_reference_date(engine: Engine) -> date | None:
     """Return the latest stored reference month."""
     with engine.connect() as conn:
@@ -155,12 +173,7 @@ def _latest(
         )
     result: dict[tuple[str, date], dict[str, Any]] = {}
     for row in rows:
-        ref = (
-            row["reference_date"].date()
-            if isinstance(row["reference_date"], datetime)
-            else row["reference_date"]
-        )
-        result[(str(row["series_id"]), ref)] = dict(row)
+        result[(str(row["series_id"]), _as_date(row["reference_date"]))] = dict(row)
     return result
 
 
@@ -200,11 +213,7 @@ def upsert_time_series(
                     row["value"], ROUND_DECIMALS
                 ):
                     continue
-                vintage = (
-                    current["vintage_date"].date()
-                    if isinstance(current["vintage_date"], datetime)
-                    else current["vintage_date"]
-                )
+                vintage = _as_date(current["vintage_date"])
                 if vintage == today:
                     updates.append({**row, "vintage_date": today})
                 else:

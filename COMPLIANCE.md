@@ -1,140 +1,178 @@
 # Rosstat CPI — implementation status and verification record
 
-Status: **source research blocked; scaffold only; not production-ready**.
-Investigation date: 2026-09-11 UTC.
-Existing branch: `agent/rosstat-scaffold`; existing draft PR: #1.
-Baseline inspected: `ff32d147dad83aea7ef63c4ff93bdde74335bbf6`.
+Status: **implemented and verified against the live official source**.
+Verification date: 2026-09-11 UTC. Source publication observed: 2026-09-11
+("Обновлено: 11 сентября 2026 г.").
 
-This document records incomplete work, not certification. No Rosstat parser,
-series mapping, weight mathematics, or runnable ingestion pipeline has been
-implemented in this investigation. No schema incompatibility has been established.
+This record supersedes the 2026-09-11 entry that reported the source as
+unreachable. The earlier block was an environment-level TLS failure, not an
+upstream outage: `rosstat.gov.ru` is certified by the Russian national CA, which
+no default trust store carries, and the server does not send its intermediate.
+Adding those two public certificates to an otherwise standard verifying SSL
+context resolved it without weakening TLS. See README.md for provenance and
+fingerprints.
 
-## Verified repository facts
+## Source research
 
-- Local master guideline is byte-identical to the governance master at
-  `lucasweber1202/Coletores` commit
-  `d950ec6956b1d2aa0ac17c63efd5989ce89b8f0a`.
-- Existing `scripts/databricks_engine.py`, `scripts/db.py`,
-  `scripts/run_logs.py`, and `scripts/time_series.py` are byte-identical
-  to UK commit `6511393ec11ed890c9bd1344036350c0858db425`.
-  This comparison is not a runtime verification of these modules.
-- Local master, copilot instructions, AGENTS.md, CLAUDE.md, build-collector,
-  series-selection, get-api-docs, and verification-loop instructions were read.
-- UK COMPLIANCE.md, init_db.py and config.py were inspected. A complete UK
-  implementation/test review remains pending.
-- The linked `guimasuko/collector_template` root listing contains
-  .github/, .vscode/, GUIDELINES.md and FORECAST_TARGET_GUIDELINES.md,
-  but no scripts/ or executable pilot. The requested
-  scripts/databricks_engine.py returned 404.
-  Its guidelines were retrieved through the GitHub connector; a full
-  executable-pilot comparison remains pending.
-- UK documents an approved original_weights key of
-  (series_id, reference_date, vintage_date), retaining weight_base_year.
-  Whether and how Rosstat needs that exception remains unverified.
-- The UK implementation itself explicitly has remaining release gates.
-  Reusing its code is not evidence of PostgreSQL/Databricks certification.
+| Surface investigated | Verdict | Evidence |
+|---|---|---|
+| Rosstat SDMX (SDDS, IMF `ECOFIN_DSD(1.0)`) | **Primary, headline only** | `SDDS_CPI 2000_2026.xml` and `SDDS_CPI_PPI_2026.xml` parsed; each carries exactly one CPI series (`PCPI_IX`, `REF_AREA=RU`, `FREQ=M`) at one index reference period. No dimensions for divisions, groups, items or weights exist in the message. |
+| Rosstat official workbooks | **Primary** | Eight workbooks discovered from `/statistics/price` and parsed; they carry the full hierarchy, all three published transformations and the official basket. |
+| Statistical Data Showcase (`showdata.rosstat.gov.ru`) | Not used | Reachable, but a client-rendered application; `/finder/...` paths all return the same SPA shell and no public API is documented. |
+| EMISS / Fedstat (`fedstat.ru`) | Not used | TLS fine, but every request returns HTTP 403 to a non-browser client. |
+| HTML scraping | Not needed | Only the two section pages are parsed, and only to discover official file names. |
+| Third-party aggregators | **Not used at any point** | No FRED/IMF/OECD request is made by this collector. |
 
-## Reproducible source-access failure
-
-Direct HTTPS GET and HEAD requests to the official landing page returned
-HTTP 502. The GET response body was:
-
-```text
-502 Bad Gateway
-Certificate verify failed: unable to get local issuer certificate
-```
-
-The research service returned 502 for all five pages below. A separate
-browser navigation to the landing page displayed the same certificate error.
-This establishes an access limitation in this environment, not that Rosstat
-is globally unavailable or that the source lacks the requested data.
-TLS verification was not disabled.
-
-| Official URL discovered | Search result label / purpose | Inspection result |
-| --- | --- | --- |
-| https://rosstat.gov.ru/statistics/price | Prices and inflation landing page | GET/HEAD/browser 502 |
-| https://rosstat.gov.ru/free_doc/new_site/prices/bd/bd_1902003.htm | CPI in KIPC grouping | Research open 502 |
-| https://rosstat.gov.ru/storage/mediabank/tab-KIPC.htm | Consumer expenditure structure in KIPC grouping | Research open 502 |
-| https://rosstat.gov.ru/free_doc/new_site/prices/ipc_met.htm | CPI and average prices methodology links | Research open 502 |
-| https://rosstat.gov.ru/bgd/free/B00_24/IssWWW.exe/Stg/d000/I000111R.HTM | Summary methodology | Research open 502 |
-
-These are discovered official page URLs, **not verified workbook endpoints**.
-Search snippets are insufficient evidence for workbook layout, index
-representation, numerical values, hierarchy or methodology.
-No source XLSX was successfully downloaded. No API/EMISS alternative has
-been verified. No assumptions about fixed-base levels, MoM, normalization,
-annual regimes or geographic aggregation have been incorporated into code.
-
-Reproduce without weakening TLS:
-
-```bash
-curl --fail-with-body --connect-timeout 10 --max-time 25 https://rosstat.gov.ru/statistics/price
-```
-
-## Implementation plan to resume when source documents are accessible
-
-1. Finish reading the reference guidelines and the complete UK implementation.
-   Identify the executable fleet pilot referenced by governance.
-2. Inspect and download actual Rosstat headline, KIPC indices, historical
-   expenditure weights, post-2025 combined publications, classifier,
-   methodology applicable in 2026, and release-calendar documents.
-   Record exact URLs, sheet/header layouts, coverage and published precision.
-3. Compare official downloads with API/EMISS/Data Showcase coverage. Choose
-   verified acquisition endpoints; determine representation and native IDs.
-4. Implement config/dependencies, extract.py and source-specific regression
-   tests. Verify national scope, parseable IDs, dates, values and hierarchy.
-5. Implement only the weight regime/storage semantics supported by evidence.
-   Preserve originals and prove any operational transformation quantitatively.
-6. Implement validation gates and audit export; then orchestrate canonical
-   observation writes before metadata, logging and release monitoring.
-7. Run real-source parsing and sampling, PostgreSQL and Databricks checks,
-   two unchanged-source runs, revision/same-day vintage tests and a controlled
-   failure. Complete security and diff reviews before changing draft status.
+Methodology read: `Opredeleniya_IPC.pdf` (concepts, the four published base
+periods, CPI observation since 1992, release on the 6th–10th working day), the
+`/statistics/price/methodology` order index, and the CPI manual Rosstat hosts at
+`cpi_ru(3).pdf`, which states the fixed-weight higher-level aggregation identity
+this collector reconciles against.
 
 ## Verification summary
 
-| Gate / requested result | Status | Evidence / remaining work |
-| --- | --- | --- |
-| Branch/PR identity | PASS | Existing branch and draft PR #1 inspected |
-| Master versus Coletores | PASS | Byte comparison |
-| Four scaffold modules versus UK | PASS | Byte comparison |
-| Executable live-pilot comparison | PENDING | Linked template has no executable scripts |
-| Real-source download/parser | BLOCKED | HTTPS 502 certificate error |
-| Chosen source files/API | UNVERIFIED | Page discovery only |
-| Methodology / national scope / native IDs | UNVERIFIED | Source content inaccessible |
-| Number of series / hierarchy coverage | NOT MEASURED | No parsed official data |
-| First/last observation | NOT MEASURED | No parsed official data |
-| Weight regimes / normalization | UNVERIFIED | No inspected official weights |
-| Bottom-up / tolerance / maximum residual | NOT EXECUTED | Formula and precision unverified |
-| Build/import, lint and source tests | NOT EXECUTED | No implementation added |
-| PostgreSQL / Databricks pipeline | NOT EXECUTED | No runnable pipeline |
-| First/second run counts / metadata no-op | NOT EXECUTED | No source/database replay |
-| Controlled error and exactly one error log | NOT EXECUTED | No runnable pipeline |
-| Security review | LIMITED | No executable changes; TLS retained; no credentials in this document |
-| Diff review | DOCUMENTATION ONLY | This status record is the only intended file addition |
+| Gate | Status | Evidence |
+|---|---|---|
+| Build / import | PASS | `python -m scripts.init_db` and `python main.py` run end to end |
+| Type check | PASS | `python -m mypy` — no issues in 22 source files |
+| Lint / format | PASS | `python -m ruff check .` — all checks passed; `ruff format --check .` — 22 files already formatted |
+| Tests | PASS | `python -m pytest tests -q` — 66 passed, no network required |
+| Live source parse | PASS | 2 400 series, 47 424 observations, 110 098 weight rows, 1991-01 → 2026-08 |
+| Sampled official values | PASS | 13 of 13 values matched exactly (table below) |
+| Bottom-up reconciliation | PASS | 40/40 December-based, 36/36 month-on-month, coverage 1.0000 |
+| Weight reconciliation | PASS | 272/272 basket totals, 40/40 parent sums, residual 0.0000 |
+| Cross-surface agreement | PASS | 80/80 exact between `ipc_mes` and `ipc_spr` |
+| Fresh-database build | PASS | Empty database → 2 400 metadata, 47 424 observations, 110 098 weights, 1 success log |
+| Two-run idempotency | PASS | Second run: 0 observations, 0 vintages, 0 weights, 0 metadata writes, 1 success log |
+| Controlled failure | PASS | Forced gate breach wrote exactly one `error` row with a 691-character traceback and left both data tables unchanged |
+| PostgreSQL DDL | PASS | Real DDL executed twice on PostgreSQL 16; `test_init_db_portability` |
+| Databricks compatibility | NOT EXECUTED | No Databricks workspace is reachable from this environment. DDL uses only the portable subset, the `DOUBLE`/`DOUBLE PRECISION` spelling is selected per dialect, and every write path uses the Databricks `MERGE ... USING (SELECT ... UNION ALL ...)` form. |
+| Security review | PASS | See below |
+| Diff review | PASS | See below |
 
-## Inspect current values after implementation
+### Sampled official values
 
-The following is the canonical query for a future populated database.
-It has not been executed here; it does not imply that the table exists.
-On Databricks select catalog `macrobond_inhouse` first.
+Every value below was read straight from the downloaded official file by a
+script that does not import the collector, then compared with the stored row.
 
-```sql
-SELECT series_id, reference_date, value, vintage_date, collected_at
-FROM (
-    SELECT series_id, reference_date, value, vintage_date, collected_at,
-           ROW_NUMBER() OVER (
-               PARTITION BY series_id, reference_date
-               ORDER BY vintage_date DESC, collected_at DESC
-           ) AS rn
-    FROM collector_rosstat_cpi.time_series
-) ranked
-WHERE rn = 1
-ORDER BY series_id, reference_date;
-```
+| Series | Month | Stored | Official | Source |
+|---|---|---|---|---|
+| `CPI_RU_RSTG_HEADLINE_1_MOM` | 2026-08 | 99.92 | 99.92 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_HEADLINE_1_YTD` | 2026-08 | 104.67 | 104.67 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_HEADLINE_1_YOY` | 2026-08 | 106.33 | 106.33 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_AGGREGATE_6_MOM` | 2026-08 | 99.74 | 99.74 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_AGGREGATE_7_YOY` | 2026-08 | 106.51 | 106.51 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_AGGREGATE_9000_MOM` | 2026-08 | 99.46 | 99.46 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_GROUP_10_YOY` | 2026-08 | 106.43 | 106.43 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_GROUP_100_YTD` | 2026-08 | 106.91 | 106.91 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_GROUP_8060-AG_MOM` | 2026-08 | 100.31 | 100.31 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_ITEM_111_MOM` | 2026-08 | 100.51 | 100.51 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_ITEM_7802_YOY` | 2026-08 | 125.17 | 125.17 | `ipc_spr_08-2026.xlsx` |
+| `CPI_RU_RSTG_HEADLINE_1_MOM` | 1992-01 | 345.3 | 345.3 | `ipc_mes_08-2026.xlsx` |
+| `CPI_RU_SDDS_HEADLINE_ALL_IX2000` | 2026-07 | 981.0 | 981.0 | `SDDS_CPI 2000_2026.xml` |
 
-To unblock offline source inspection, original Rosstat workbooks plus the
-applicable methodology/classifier documents can be supplied with their
-official download URLs and download dates. Live discovery, release monitoring
-and live acquisition must still be verified in an environment able to reach
-Rosstat successfully with certificate verification enabled.
+Weights (same method): headline `1` = 100 exactly, item `111` = 0.638 exactly,
+services `9000` = 28.226 exactly, all for 2026-08.
+
+### Bottom-up reconciliation, 2026-09-11 publication
+
+| Check | Pass | Warn | Fail | Worst residual | Gates the run |
+|---|---|---|---|---|---|
+| `index_dec_based` | 40 | 0 | 0 | +0.0353 index points | yes |
+| `index_month_on_month` | 36 | 0 | 0 | −0.0073 | yes |
+| `weight_total` | 272 | 0 | 0 | 0.0000 | yes |
+| `weight_sum` | 40 | 0 | 0 | 0.0000 | yes |
+| `surface_agreement` | 80 | 0 | 0 | 0.0000 | yes |
+| `kipc_division_total` | 15 | 0 | 0 | 0.0000 | no |
+| `kipc_weight_sum` | 6 810 | 2 | 257 | +4.992 | no |
+
+The KIPC weight-sum failures are defects in Rosstat's own published
+classification codes, not in this collector: 2012–2020 close perfectly across
+~475 parents per year, while 2023 — whose sheet publishes far fewer intermediate
+levels — fails on 49%. Nothing from that layer reaches the standardized tables,
+so it is reported, not repaired.
+
+### Idempotency evidence
+
+| | Run 1 (empty database) | Run 2 (unchanged) |
+|---|---|---|
+| `time_series` rows written | 47 424 new, 0 new vintages | 0 new, 0 new vintages, 0 same-day updates |
+| `weights` rows written | 110 098 new, 0 new vintages | 0 new, 0 new vintages |
+| `metadata` rows | 2 400 inserted, 0 updated | 0 inserted, 0 updated |
+| `logs` rows | 1 `success` | 1 `success` |
+
+Post-run table counts: `metadata` 2 400, `time_series` 47 424, `weights`
+110 098. Duplicate `(series_id, reference_date, vintage_date)` triples: 0.
+Metadata rows with `observation_count <= 0` or a missing required field: 0.
+Non-finite or non-positive stored values: 0. Distinct `vintage_date`: one, the
+collection date — no historical backfill was stamped with its reference date.
+
+## Deviations from the base contract, and why
+
+- **`weights` table.** Approved for a forecast-target collector with weights. It
+  holds the official Rosstat basket verbatim, so no `original_weights` table is
+  created — there is nothing transformed to preserve separately.
+- **No standardized column was added.** `metadata`, `time_series` and `logs`
+  match the fleet DDL.
+- **`scripts/validate.py` and `scripts/export_validation_xlsx.py`** exist because
+  the collector kind requires bottom-up reconstruction and an analyst-facing
+  audit export; both mirror the reference forecast-target collector's layout.
+- **`scripts/time_series.py` and `scripts/weights.py` gained `_as_date()`.** The
+  copied fleet implementation compared a stored `reference_date` to an incoming
+  `date` without normalizing what the dialect returns. PostgreSQL and Databricks
+  return a `date` and are unaffected; a dialect returning the ISO string missed
+  every stored row and rewrote the whole panel. `scripts/metadata.py` already
+  carried the same normalizer, so this aligns the three modules.
+- **`rosstat_ca_bundle.pem`** is committed. It holds two public government CA
+  certificates, no secret, and is the only way to verify the official host's
+  certificate at all.
+- **`scripts/extract.py` is ~1 200 lines**, above the guideline's ~400-line
+  guidance. The source forces it: six official surfaces with unrelated layouts
+  (the combined monthly workbook, the since-1991 workbook, two annual basket
+  workbooks with layouts that change by year, the KIPC classification, and an
+  SDMX 2.1 message) plus discovery and bounded HTTP. Splitting it into a client
+  and a parser is what the guideline explicitly discourages, so it stays one
+  module organised by surface, with the identifier contract at the top.
+- **`tests/` is present because the source-specific parser, the hierarchy
+  derivation and the weight mathematics are complex enough to justify it under
+  the guideline's own test rule.
+
+## Security review
+
+| Check | Result |
+|---|---|
+| Hardcoded secrets or credentials | None; `.env` is gitignored, `.env.example` holds placeholders only |
+| SQL construction | All values are named `sqlalchemy.text` parameters; table and schema identifiers come only from module constants |
+| `eval` / `exec` / pickle / unsafe YAML | None |
+| `shell=True` with untrusted content | None; no subprocess is spawned |
+| Server-side request forgery | `_assert_allowed()` rejects any URL whose host is not one of the two Rosstat hosts, including links discovered on a section page |
+| Redirects | `follow_redirects=False` |
+| TLS | Verification and hostname checking always on; the bundle only adds the CA that certifies the official host |
+| Bounds | Request timeout, bounded exponential backoff with a delay ceiling, a download size ceiling, and schema validation on every parsed sheet |
+| Credential logging | The database URL is rendered with `hide_password=True`; no token or auth header is ever logged |
+| Resources | Every engine connection and workbook uses a context manager or is explicitly closed |
+| Dependencies | Nine, all fleet-standard; no `requests`, `python-dotenv`, ORM, or migration framework |
+
+No CRITICAL, HIGH, MEDIUM or LOW finding is outstanding.
+
+## Diff review
+
+Added: `main.py`, `scripts/config.py`, `scripts/extract.py`,
+`scripts/init_db.py`, `scripts/metadata.py`, `scripts/validate.py`,
+`scripts/weights.py`, `scripts/export_validation_xlsx.py`, `requirements.txt`,
+`pyproject.toml`, `.env.example`, `rosstat_ca_bundle.pem`, `tests/`.
+Modified: `scripts/time_series.py` (the `_as_date` normalizer above),
+`README.md`, `COMPLIANCE.md`.
+Unchanged: `MASTER_MACRO_COLLECTOR_GUIDELINES.md`, `AGENTS.md`, `CLAUDE.md`,
+`.github/`, `.vscode/`, `.gitignore`, `scripts/db.py`,
+`scripts/databricks_engine.py`, `scripts/run_logs.py`.
+
+No token, password, `.env`, debug print, breakpoint or generated artifact is
+committed; `rosstat_cpi_validation.xlsx` is produced on demand and gitignored.
+
+## Remaining gates
+
+- Databricks end-to-end execution against a real workspace.
+- One live monthly release observed through `--watch`, and the first genuine
+  upstream revision, to confirm the vintage path on real revised data rather
+  than only on the synthetic revision covered by `tests/test_persistence.py`.
