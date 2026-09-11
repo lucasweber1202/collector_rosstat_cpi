@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "collector-rosstat-cpi"
+version = "0.1.0"
+description = "Russia Consumer Price Index collector with the official Rosstat basket and bottom-up validation"
+requires-python = ">=3.11"
+dependencies = [
+  "azure-identity>=1.17",
+  "azure-keyvault-secrets>=4.8",
+  "databricks-sqlalchemy>=2.0",
+  "httpx>=0.27",
+  "openpyxl>=3.1",
+  "psycopg2-binary>=2.9",
+  # Databricks resolves its token from pyspark.dbutils.DBUtils inside a
+  # notebook or job context; the fleet pins the runtime-matched version.
+  "pyspark==4.1.1",
+  "sqlalchemy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.11", "pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["main.py", "scripts", "tests"]
+# tests/ has no __init__.py, so mypy needs the repository root as the package base.
+explicit_package_bases = true
+mypy_path = "."
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+# The Azure SDK ships no type stubs; it is a fleet deployment dependency.
+module = ["azure.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Fleet-wide VERBATIM file. Its pyspark import guard is correct for a runtime
+# without pyspark installed, so the ignore it carries must not be "cleaned up"
+# here just because this checkout has the package.
+module = "scripts.databricks_engine"
+warn_unused_ignores = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Governance documents are checked in verbatim; the formatter must not rewrite
+# the Python snippets they quote.
+extend-exclude = ["*.md"]
