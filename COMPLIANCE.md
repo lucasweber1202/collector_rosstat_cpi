@@ -1,7 +1,12 @@
 # Rosstat CPI — verification status
 
 **Status: partial implementation; not ready for production or merge.**
-Continue `agent/rosstat-scaffold` and draft PR #1. This replaces the earlier
+Continue `agent/rosstat-scaffold`. PR #1 was already merged at the previous
+head `3b558c15ca15781e2410c0282c1ea6fe401ae91d` when final verification ran.
+The implementation commit `4b038bfc67d20fbe11116f417f2649c0d1b87605` is on this
+branch but is not included in that merged PR or main. No replacement PR was
+created because the task specified updating PR #1 only. The closed PR body was
+updated with these facts; no merge was performed during this implementation. This replaces the earlier
 research-only status record; the repository now includes working acquisition
 and database initialization commands, but no CPI ingestion pipeline.
 
@@ -100,7 +105,8 @@ https://www.python-httpx.org/advanced/clients/ .
 5. Implement quantitative reconstruction and mandatory gates, analyst export,
    release monitoring, real-source sampling and historical revision behavior.
 6. Run the complete source/database pipeline twice on PostgreSQL and Databricks,
-   plus failure-path and final source/security verification. Keep the PR draft.
+   plus failure-path and final source/security verification. Keep the new code
+   unmerged until these gates and a new review are completed.
 
 ## Canonical query after future ingestion
 
