@@ -205,6 +205,11 @@ def upsert_time_series(
                     if isinstance(current["vintage_date"], datetime)
                     else current["vintage_date"]
                 )
+                if vintage > today:
+                    raise ValueError(
+                        "Collection date is earlier than the latest stored vintage; "
+                        "refusing a backdated revision"
+                    )
                 if vintage == today:
                     updates.append({**row, "vintage_date": today})
                 else:

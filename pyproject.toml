@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "collector-rosstat-cpi"
+version = "0.1.0"
+description = "Rosstat CPI source acquisition and fleet persistence foundation"
+requires-python = ">=3.11"
+dependencies = [
+  "azure-identity>=1.17",
+  "azure-keyvault-secrets>=4.8",
+  "databricks-sqlalchemy>=2.0",
+  "defusedxml>=0.7",
+  "httpx[socks]>=0.27",
+  "openpyxl>=3.1",
+  "pandas>=2.0",
+  "psycopg2-binary>=2.9",
+  "sqlalchemy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

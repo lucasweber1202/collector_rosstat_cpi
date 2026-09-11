@@ -1,123 +1,111 @@
-# Rosstat CPI — implementation status and verification record
+# Rosstat CPI — verification status
 
-Status: **source research blocked; scaffold only; not production-ready**.
-Investigation date: 2026-09-11 UTC.
-Existing branch: `agent/rosstat-scaffold`; existing draft PR: #1.
-Baseline inspected: `ff32d147dad83aea7ef63c4ff93bdde74335bbf6`.
+**Status: partial implementation; not ready for production or merge.**
+Continue `agent/rosstat-scaffold` and draft PR #1. This replaces the earlier
+research-only status record; the repository now includes working acquisition
+and database initialization commands, but no CPI ingestion pipeline.
 
-This document records incomplete work, not certification. No Rosstat parser,
-series mapping, weight mathematics, or runnable ingestion pipeline has been
-implemented in this investigation. No schema incompatibility has been established.
+## Implemented and reused
 
-## Verified repository facts
+- `.env.example`, `pyproject.toml`, `requirements.txt`: deployment dependencies,
+  HTTP settings and explicit database configuration. No secrets or dotenv dependency.
+- `scripts/config.py`: adapted from UK configuration; exact Rosstat schema name;
+  no unverified start date, weight regime, tolerance or series mapping.
+- `scripts/init_db.py`: standard three-table DDL from UK, including its 64-bit
+  float spelling adaptation. No new standardized columns or additional tables.
+- `scripts/source_research.py`: single-client official document acquisition,
+  allowlisted HTTPS, manually validated redirects, bounded retries and sizes,
+  candidate discovery, SHA-256 traceability, workbook inspection and manifest.
+  This flat module is a development research command, not `extract.py` and not
+  a substitute for the required official-layout parser.
+- `main.py`: explicit `--research` and `--init-db` commands; one best-effort
+  database run log when configured; research without DB requires no credentials.
+- `scripts/time_series.py`: inherited writer plus one regression fix: reject
+  a changed observation if the collection date predates its current vintage.
+- `tests/test_source_research.py`, `tests/test_persistence.py`: 25 meaningful
+  synthetic boundary/persistence tests. No synthetic values are deployed.
 
-- Local master guideline is byte-identical to the governance master at
-  `lucasweber1202/Coletores` commit
-  `d950ec6956b1d2aa0ac17c63efd5989ce89b8f0a`.
-- Existing `scripts/databricks_engine.py`, `scripts/db.py`,
-  `scripts/run_logs.py`, and `scripts/time_series.py` are byte-identical
-  to UK commit `6511393ec11ed890c9bd1344036350c0858db425`.
-  This comparison is not a runtime verification of these modules.
-- Local master, copilot instructions, AGENTS.md, CLAUDE.md, build-collector,
-  series-selection, get-api-docs, and verification-loop instructions were read.
-- UK COMPLIANCE.md, init_db.py and config.py were inspected. A complete UK
-  implementation/test review remains pending.
-- The linked `guimasuko/collector_template` root listing contains
-  .github/, .vscode/, GUIDELINES.md and FORECAST_TARGET_GUIDELINES.md,
-  but no scripts/ or executable pilot. The requested
-  scripts/databricks_engine.py returned 404.
-  Its guidelines were retrieved through the GitHub connector; a full
-  executable-pilot comparison remains pending.
-- UK documents an approved original_weights key of
-  (series_id, reference_date, vintage_date), retaining weight_base_year.
-  Whether and how Rosstat needs that exception remains unverified.
-- The UK implementation itself explicitly has remaining release gates.
-  Reusing its code is not evidence of PostgreSQL/Databricks certification.
+Master guideline still matches governance at Coletores commit
+`d950ec6956b1d2aa0ac17c63efd5989ce89b8f0a`.
+The original four generic modules matched UK commit
+`6511393ec11ed890c9bd1344036350c0858db425`; only the documented time_series guard
+now differs. db.py, databricks_engine.py and run_logs.py remain unchanged.
+The linked guimasuko/collector_template root contains governance documents and
+editor/agent settings, but no executable scripts. A live executable-pilot
+comparison remains pending. The UK reference also has unresolved release gates;
+copying its code does not certify this collector.
 
-## Reproducible source-access failure
+## Official-source investigation and measured live result
 
-Direct HTTPS GET and HEAD requests to the official landing page returned
-HTTP 502. The GET response body was:
+Official search located these documents. Labels identify search results, not
+verified content. The current live acquisition used timeout 10 seconds and one
+retry, with TLS verification and the environment's configured transport retained.
 
-```text
-502 Bad Gateway
-Certificate verify failed: unable to get local issuer certificate
-```
-
-The research service returned 502 for all five pages below. A separate
-browser navigation to the landing page displayed the same certificate error.
-This establishes an access limitation in this environment, not that Rosstat
-is globally unavailable or that the source lacks the requested data.
-TLS verification was not disabled.
-
-| Official URL discovered | Search result label / purpose | Inspection result |
+| Official URL | Purpose | Live result |
 | --- | --- | --- |
-| https://rosstat.gov.ru/statistics/price | Prices and inflation landing page | GET/HEAD/browser 502 |
-| https://rosstat.gov.ru/free_doc/new_site/prices/bd/bd_1902003.htm | CPI in KIPC grouping | Research open 502 |
-| https://rosstat.gov.ru/storage/mediabank/tab-KIPC.htm | Consumer expenditure structure in KIPC grouping | Research open 502 |
-| https://rosstat.gov.ru/free_doc/new_site/prices/ipc_met.htm | CPI and average prices methodology links | Research open 502 |
-| https://rosstat.gov.ru/bgd/free/B00_24/IssWWW.exe/Stg/d000/I000111R.HTM | Summary methodology | Research open 502 |
+| https://rosstat.gov.ru/statistics/price | Prices and inflation landing page | HTTP 502 |
+| https://rosstat.gov.ru/free_doc/new_site/prices/bd/bd_1902003.htm | KIPC CPI page | HTTP 502 |
+| https://rosstat.gov.ru/storage/mediabank/tab-KIPC.htm | KIPC expenditure weights page | HTTP 502 |
+| https://rosstat.gov.ru/free_doc/new_site/prices/ipc_met.htm | CPI methodology links | HTTP 502 |
+| https://rosstat.gov.ru/bgd/free/B00_24/IssWWW.exe/Stg/d000/I000111R.HTM | Summary methodology | HTTP 502 |
+| https://55.rosstat.gov.ru/storage/mediabank/metod_ipc_2026.pdf | Published 2026 methodology document | HTTP 502 |
 
-These are discovered official page URLs, **not verified workbook endpoints**.
-Search snippets are insufficient evidence for workbook layout, index
-representation, numerical values, hierarchy or methodology.
-No source XLSX was successfully downloaded. No API/EMISS alternative has
-been verified. No assumptions about fixed-base levels, MoM, normalization,
-annual regimes or geographic aggregation have been incorporated into code.
+Additional direct requests to eng.rosstat.gov.ru and 52.rosstat.gov.ru also returned
+502 with `Certificate verify failed: unable to get local issuer certificate`.
+Earlier browser navigation confirmed the same certificate error. This is an
+access failure in this environment, not proof that Rosstat is globally unavailable.
+API/EMISS alternatives were searched but no usable official endpoint was verified.
 
-Reproduce without weakening TLS:
-
-```bash
-curl --fail-with-body --connect-timeout 10 --max-time 25 https://rosstat.gov.ru/statistics/price
-```
-
-## Implementation plan to resume when source documents are accessible
-
-1. Finish reading the reference guidelines and the complete UK implementation.
-   Identify the executable fleet pilot referenced by governance.
-2. Inspect and download actual Rosstat headline, KIPC indices, historical
-   expenditure weights, post-2025 combined publications, classifier,
-   methodology applicable in 2026, and release-calendar documents.
-   Record exact URLs, sheet/header layouts, coverage and published precision.
-3. Compare official downloads with API/EMISS/Data Showcase coverage. Choose
-   verified acquisition endpoints; determine representation and native IDs.
-4. Implement config/dependencies, extract.py and source-specific regression
-   tests. Verify national scope, parseable IDs, dates, values and hierarchy.
-5. Implement only the weight regime/storage semantics supported by evidence.
-   Preserve originals and prove any operational transformation quantitatively.
-6. Implement validation gates and audit export; then orchestrate canonical
-   observation writes before metadata, logging and release monitoring.
-7. Run real-source parsing and sampling, PostgreSQL and Databricks checks,
-   two unchanged-source runs, revision/same-day vintage tests and a controlled
-   failure. Complete security and diff reviews before changing draft status.
+Actual CLI result: **0 downloaded documents, 0 workbooks, 6 recorded errors,
+exit code 1, no observations written**. The manifest preserves individual failures.
+No successful official data acquisition, CPI representation, national series count,
+first/last period, KIPC mapping, English terminology, weight regime, formula,
+normalization, reconstruction tolerance or maximum residual can be reported.
 
 ## Verification summary
 
-| Gate / requested result | Status | Evidence / remaining work |
+| Gate | Result | Scope |
 | --- | --- | --- |
-| Branch/PR identity | PASS | Existing branch and draft PR #1 inspected |
-| Master versus Coletores | PASS | Byte comparison |
-| Four scaffold modules versus UK | PASS | Byte comparison |
-| Executable live-pilot comparison | PENDING | Linked template has no executable scripts |
-| Real-source download/parser | BLOCKED | HTTPS 502 certificate error |
-| Chosen source files/API | UNVERIFIED | Page discovery only |
-| Methodology / national scope / native IDs | UNVERIFIED | Source content inaccessible |
-| Number of series / hierarchy coverage | NOT MEASURED | No parsed official data |
-| First/last observation | NOT MEASURED | No parsed official data |
-| Weight regimes / normalization | UNVERIFIED | No inspected official weights |
-| Bottom-up / tolerance / maximum residual | NOT EXECUTED | Formula and precision unverified |
-| Build/import, lint and source tests | NOT EXECUTED | No implementation added |
-| PostgreSQL / Databricks pipeline | NOT EXECUTED | No runnable pipeline |
-| First/second run counts / metadata no-op | NOT EXECUTED | No source/database replay |
-| Controlled error and exactly one error log | NOT EXECUTED | No runnable pipeline |
-| Security review | LIMITED | No executable changes; TLS retained; no credentials in this document |
-| Diff review | DOCUMENTATION ONLY | This status record is the only intended file addition |
+| Import/build | PASS | Compilation and CLI help |
+| Lint/format | PASS | Modified Python modules and tests |
+| Type check | SKIP | No mypy/pyright configuration |
+| Tests | PASS | 25 tests with synthetic fixtures |
+| Unchanged second write | PASS, LIMITED | Synthetic observation writer in SQLite: first (1,0), second (0,0); two success logs |
+| Later/same-day revisions | PASS, LIMITED | Historical value preserved; new vintage and same-day update verified |
+| Backdated revision rejection | PASS | Reproduced failure before fix; regression now passes |
+| Controlled failure | PASS, LIMITED | Acquisition failure after DB initialization: exactly one error log with traceback, zero observations |
+| Metadata idempotency | NOT EXECUTED | Source-specific metadata builder absent |
+| PostgreSQL/Databricks | NOT EXECUTED | No configured Databricks; local PostgreSQL installation failed due runtime package-manager permissions |
+| Live Rosstat data | BLOCKED | Six HTTP 502 failures; nonzero exit |
+| Bottom-up / weights / hierarchy | NOT IMPLEMENTED | Source mathematics and layouts unverified |
+| Security | PASS, LIMITED | HTTPS allowlist, redirect checks, byte/ZIP budgets, secure XML requirement, sanitized transport errors, no credentials in changes |
+| Dependency vulnerability scan | SKIP | No automated vulnerability audit executed |
+| Diff review | PASS | Intended source/test/documentation files only; no downloaded binaries, .env or generated reports committed |
 
-## Inspect current values after implementation
+Security-specific parser dependency `defusedxml` is required by the openpyxl
+security guidance: https://openpyxl.readthedocs.io/en/stable/ . The collector
+refuses XLSX inspection when secure XML support is disabled. HTTP behavior follows
+https://www.python-httpx.org/advanced/clients/ .
 
-The following is the canonical query for a future populated database.
-It has not been executed here; it does not imply that the table exists.
-On Databricks select catalog `macrobond_inhouse` first.
+## Remaining acceptance work
+
+1. Obtain official documents with valid TLS in the execution environment; inspect
+   their complete layouts, classification, representation and 2026 methodology.
+2. Verify current governance in full and reconcile against the executable pilot.
+3. Implement national series selection, structured-ID parsing, metadata generation,
+   historical extraction and official weight preservation using actual source data.
+4. Determine Rosstat-specific regimes and formula; apply the approved UK schema
+   exception only if it actually matches Rosstat requirements. No schema blocker
+   has yet been established.
+5. Implement quantitative reconstruction and mandatory gates, analyst export,
+   release monitoring, real-source sampling and historical revision behavior.
+6. Run the complete source/database pipeline twice on PostgreSQL and Databricks,
+   plus failure-path and final source/security verification. Keep the PR draft.
+
+## Canonical query after future ingestion
+
+The query has not been run on Rosstat data. On Databricks select catalog
+`macrobond_inhouse` first.
 
 ```sql
 SELECT series_id, reference_date, value, vintage_date, collected_at
@@ -132,9 +120,3 @@ FROM (
 WHERE rn = 1
 ORDER BY series_id, reference_date;
 ```
-
-To unblock offline source inspection, original Rosstat workbooks plus the
-applicable methodology/classifier documents can be supplied with their
-official download URLs and download dates. Live discovery, release monitoring
-and live acquisition must still be verified in an environment able to reach
-Rosstat successfully with certificate verification enabled.

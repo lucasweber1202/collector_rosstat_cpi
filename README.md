@@ -1,35 +1,81 @@
-# collector_rosstat_cpi
+# Rosstat CPI collector
 
-Russia national monthly Consumer Price Index collector for the Federal State Statistics Service (Rosstat).
+Russia national monthly CPI forecast-target project. Fleet country code: `RUB`;
+economic group: `consumer_prices`; schema: `collector_rosstat_cpi`.
+Official starting point: https://rosstat.gov.ru/statistics/price.
 
-> **Status: scaffold / source research required.** This repository is not production-ready yet. The source-specific Rosstat extraction, series curation, hierarchy, weights, validation, metadata, orchestration, and release behavior must be implemented and verified against current official Rosstat files and methodology before use.
+**Status: acquisition and database foundation implemented; CPI ingestion is not
+implemented or production-ready.** Official documents currently return HTTP 502
+from the execution environment. No hierarchy, weight formula or workbook layout
+is guessed. See [COMPLIANCE.md](COMPLIANCE.md) for measured results and pending gates.
 
-## Approved scope
+## Setup
 
-- Source: Federal State Statistics Service (Rosstat)
-- Dataset: Consumer Price Index (CPI)
-- Fleet code: `RUB`
-- Collector kind: `forecast-target`
-- Intended modelling frequency: monthly
-- Geographic scope: Russian Federation / national
-- Official source root: https://rosstat.gov.ru/statistics/price
-- Target coverage: curated national monthly CPI index levels, KIPC hierarchy, and official consumer-expenditure weights required for auditable bottom-up reconstruction where supported by the official source
+Python 3.11 or newer:
 
-## Governance
+```bash
+python -m pip install -e '.[dev]'
+```
 
-Read `MASTER_MACRO_COLLECTOR_GUIDELINES.md` and `.github/copilot-instructions.md` before modifying the collector. The consolidated master guideline overrides stale examples in copied skills.
+Copy `.env.example` to `.env` if database access or HTTP tuning is needed.
+The manual loader preserves environment overrides. Credentials must stay out of git.
 
-The UK CPI collector at `https://github.com/lucasweber1202/collector_ons_cpi` is a structural reference for forecast-target weights, hierarchy, validation, and analyst export patterns only. ONS-specific source assumptions must not be copied into Rosstat logic.
+## Acquire the official evidence
 
-## Preloaded reusable scaffold
+```bash
+python main.py --research --output ../rosstat-source-evidence
+```
 
-The current scaffold already contains source-agnostic database/runtime pieces that can be reconciled against the live pilot and reused:
+This command requires no database. It uses one verified HTTPX client for six
+known official pages/documents, then inspects at most one additional layer of
+relevant direct document links. It does not crawl regional statistics or select
+a workbook by an arbitrary filename. Candidate discovery is deliberately an
+inventory, not a verified selection of CPI series.
 
-- `scripts/databricks_engine.py`
-- `scripts/db.py`
-- `scripts/run_logs.py`
-- `scripts/time_series.py`
-- fleet `.gitignore` and VS Code settings
-- collector build, series-selection, API-docs, and verification guidance
+Downloads have size, redirect, retry and ZIP expansion limits. XLSX inspection
+requires secure XML parsing. The output contains original files named by SHA-256
+and `manifest.json` with source URLs, hashes, sizes, sheet names, sample cells,
+and failures. Source cells are not converted into observations. Legacy XLS files
+are preserved but not parsed. PDF files are preserved but not semantically read.
+HTML uses the charset declared by its HTTP response; HTML-only charset declarations
+have not yet been implemented. Query-string download endpoints are rejected until
+verified and explicitly supported.
 
-Source-specific modules are intentionally absent until official Rosstat research verifies their inputs and behavior.
+A failed source, truncated inventory, or absence of any workbook returns exit code
+1. Successful acquisition still does not certify source scope or methodology.
+Store evidence outside this checkout; generated files must not be committed.
+This is a development acquisition operation, not a cache for production collection.
+
+## Initialize the database foundation
+
+Set `COLLECTOR_DB_URL` for PostgreSQL, or `PROD=true` and the Databricks settings:
+
+```bash
+python main.py --init-db
+```
+
+Creates only `metadata`, `time_series`, and `logs`, without observation writes.
+The inherited float-type adaptation uses DOUBLE PRECISION for PostgreSQL and
+DOUBLE for Databricks. No weights schema is created before its source semantics
+are established. A configured database also receives one run log from research
+operations; without a database, the evidence manifest and console capture results.
+Log persistence is best-effort if the database itself is unavailable.
+
+The observation writer retains collection-date vintages, unchanged-value no-ops,
+same-day updates and later revisions. A changed observation submitted with a date
+earlier than the latest stored vintage is rejected before any batch is written.
+
+## Verification
+
+```bash
+python -m pytest -q -W ignore::DeprecationWarning
+python -m ruff check main.py scripts tests
+python -m ruff format --check main.py scripts tests
+python -m compileall -q main.py scripts tests
+```
+
+25 tests passed. Fixtures are synthetic. Storage behavior was tested with SQLite;
+PostgreSQL and Databricks execution has not been verified. The full Rosstat parser,
+metadata generation, weights, bottom-up reconstruction, audit Excel and monthly
+release monitoring remain pending official source inspection. There is no
+`--no-watch` ingestion command yet.
