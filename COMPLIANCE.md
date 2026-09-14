@@ -114,7 +114,7 @@ collection date — no historical backfill was stamped with its reference date.
 
 ## Direct template comparison
 
-Executed 2026-09-14 against
+**PASS — no blocker or minor drift.** Executed 2026-09-14 against
 [`guimasuko/collector_template`](https://github.com/guimasuko/collector_template)
 tree `8e4613b36c2808a7de234934a81bb26f7a22d367`, including
 `GUIDELINES.md` blob `1bf3df07a9b81932d26571def6bf0e531b8c1464`,
