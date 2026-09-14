@@ -1,5 +1,10 @@
 # Rosstat CPI — implementation status and verification record
 
+**Governance status: `verification`.** The implemented code and recorded source,
+PostgreSQL, idempotency, failure-path and quality evidence support promotion from
+`building`. Mandatory external runtime evidence remains open, so this is not
+`ready`.
+
 Status: **implemented and verified against the live official source**.
 Verification date: 2026-09-11 UTC. Source publication observed: 2026-09-11
 ("Обновлено: 11 сентября 2026 г.").
@@ -46,7 +51,7 @@ this collector reconciles against.
 | Two-run idempotency | PASS | Second run: 0 observations, 0 vintages, 0 weights, 0 metadata writes, 1 success log |
 | Controlled failure | PASS | Forced gate breach wrote exactly one `error` row with a 691-character traceback and left both data tables unchanged |
 | PostgreSQL DDL | PASS | Real DDL executed twice on PostgreSQL 16; `test_init_db_portability` |
-| Databricks compatibility | NOT EXECUTED | No Databricks workspace is reachable from this environment. DDL uses only the portable subset, the `DOUBLE`/`DOUBLE PRECISION` spelling is selected per dialect, and every write path uses the Databricks `MERGE ... USING (SELECT ... UNION ALL ...)` form. |
+| Databricks execution | SKIP — no approved workspace or credentials | No Databricks workspace is reachable from this environment. DDL uses only the portable subset, the `DOUBLE`/`DOUBLE PRECISION` spelling is selected per dialect, and every write path uses the Databricks `MERGE ... USING (SELECT ... UNION ALL ...)` form. |
 | Security review | PASS | See below |
 | Diff review | PASS | See below |
 
@@ -106,6 +111,33 @@ Post-run table counts: `metadata` 2 400, `time_series` 47 424, `weights`
 Metadata rows with `observation_count <= 0` or a missing required field: 0.
 Non-finite or non-positive stored values: 0. Distinct `vintage_date`: one, the
 collection date — no historical backfill was stamped with its reference date.
+
+## Direct template comparison
+
+**PASS — no blocker or minor drift.** Executed 2026-09-14 against
+[`guimasuko/collector_template`](https://github.com/guimasuko/collector_template)
+tree `8e4613b36c2808a7de234934a81bb26f7a22d367`, including
+`GUIDELINES.md` blob `1bf3df07a9b81932d26571def6bf0e531b8c1464`,
+`FORECAST_TARGET_GUIDELINES.md` blob
+`7ac0663c7825443e1009a18481c0b73b0184b1cd`, layout and fleet skills.
+
+| Area | Classification | Evidence |
+|---|---|---|
+| Repository/schema, root orchestrator and flat package | MATCH | `collector_rosstat_cpi` identity is consistent; no shared core or cross-collector runtime |
+| Standard `metadata`, `time_series`, `logs` | MATCH | Fleet columns and semantics preserved |
+| Currency/frequency/unit vocabulary | MATCH | `RUB`, monthly, canonical units validated before writes |
+| Vintage and idempotency contract | MATCH | Unchanged rerun no-op; same-day correction and later-day revision covered; backfill uses collection date |
+| Official `weights` table | SOURCE-SPECIFIC EXTENSION | Rosstat weights are already official percentage shares; there is no transformed layer requiring `original_weights` |
+| Rosstat validation/export modules | SOURCE-SPECIFIC EXTENSION | Required for six distinct official surfaces, hierarchy reconciliation and analyst evidence |
+| Rosstat CA bundle | SOURCE-SPECIFIC EXTENSION | Public trust-chain certificates only; hostname and certificate verification remain enabled |
+| Large source extractor | SOURCE-SPECIFIC EXTENSION | Six incompatible official layouts are kept in one source-specific module as required by the flat/no-client-framework rule |
+| Tests | SOURCE-SPECIFIC EXTENSION | Explicitly justified by parser, hierarchy, reconciliation and persistence complexity |
+| Minor drift | MATCH | None found |
+| Blocker | MATCH | None found in code or stored-data contract |
+
+The forecast-target rules are satisfied by official weights, hierarchy-aware
+reconciliation, full-coverage gates and analyst export. Rosstat-specific logic
+was not rewritten to imitate ONS.
 
 ## Deviations from the base contract, and why
 
