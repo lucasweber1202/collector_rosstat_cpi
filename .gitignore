@@ -9,3 +9,4 @@ __pycache__/
 
 # Generated on demand by `python main.py --export-validation`
 rosstat_cpi_validation.xlsx
+_raw/
