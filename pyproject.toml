@@ -55,3 +55,6 @@ target-version = "py311"
 # Governance documents are checked in verbatim; the formatter must not rewrite
 # the Python snippets they quote.
 extend-exclude = ["*.md"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/databricks_engine.py" = ["BLE001", "RUF100", "S110"]
